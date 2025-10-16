@@ -15,7 +15,9 @@ data class Report(
     val reorderSubjective: List<Triple<Product, Int, Double>>,
     val pricingSubjective: List<Triple<Product, Double, Int>>,
     // 종합 운영 현황
-    val operations: List<OperationRow>
+    val operations: List<OperationRow>,
+    // 신규: 카테고리 세부 분류
+    val drilldown: Drilldown
 ) {
     companion object {
         fun build(
@@ -27,7 +29,8 @@ data class Report(
             lowestTurnover: Pair<Product, Double>?,
             reorderSubjective: List<Triple<Product, Int, Double>>,
             pricingSubjective: List<Triple<Product, Double, Int>>,
-            operations: List<OperationRow>
+            operations: List<OperationRow>,
+            drilldown: Drilldown
         ) = Report(
             date = today,
             lowStock = lowStock,
@@ -38,7 +41,8 @@ data class Report(
             lowestTurnover = lowestTurnover,
             reorderSubjective = reorderSubjective,
             pricingSubjective = pricingSubjective,
-            operations = operations
+            operations = operations,
+            drilldown = drilldown
         )
     }
 
@@ -51,6 +55,12 @@ data class Report(
 
     private fun pad(s: String, w: Int): String =
         if (s.length >= w) s.take(w) else s + " ".repeat(w - s.length)
+
+    private fun groupSummaryLine(title: String, keyLabel: String, items: List<Product>): String {
+        val kinds = items.size
+        val totalStock = items.sumOf { it.currentStock }
+        return " - $title $keyLabel: ${kinds}종 (재고합계 ${fmtMoney(totalStock)}개)"
+    }
 
     // ---------- renderer ----------
     fun render(): String = buildString {
@@ -169,6 +179,43 @@ data class Report(
                             pad(fmtPct1(r.turnoverPct), 8) + " " +
                             status
                 )
+            }
+        }
+
+        // [10] 카테고리 세부 분류
+        appendLine()
+        appendLine("[10] 🗂 카테고리 세부 분류")
+
+        // 음료: 용량(ml)
+        if (drilldown.beverageByVolume.isEmpty()) {
+            appendLine(" 음료(용량): - 없음")
+        } else {
+            appendLine(" 음료(용량별)")
+            drilldown.beverageByVolume.forEach { (vol, items) ->
+                val label = if (vol > 0) "${vol}ml" else "미지정"
+                appendLine(groupSummaryLine("용량", label, items))
+            }
+        }
+
+        // 식품: 유통기한 D-?
+        if (drilldown.foodByDaysToExpire.isEmpty()) {
+            appendLine(" 식품(유통기한): - 없음")
+        } else {
+            appendLine(" 식품(유통기한별)")
+            drilldown.foodByDaysToExpire.forEach { (d, items) ->
+                val label = if (d >= 0) "D-$d" else "만료지남"
+                appendLine(groupSummaryLine("유통", label, items))
+            }
+        }
+
+        // 생활용품: 브랜드
+        if (drilldown.livingByBrand.isEmpty()) {
+            appendLine(" 생활용품(브랜드): - 없음")
+        } else {
+            appendLine(" 생활용품(브랜드별)")
+            drilldown.livingByBrand.forEach { (brand, items) ->
+                val label = brand.ifBlank { "기타" }
+                appendLine(groupSummaryLine("브랜드", label, items))
             }
         }
     }

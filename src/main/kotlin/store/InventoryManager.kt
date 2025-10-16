@@ -3,6 +3,12 @@ package store
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
+data class Drilldown(
+    val beverageByVolume: Map<Int, List<Product>>,   // volume(ml) → 음료 목록
+    val foodByDaysToExpire: Map<Int, List<Product>>, // D-? → 식품 목록
+    val livingByBrand: Map<String, List<Product>>    // 브랜드 → 생활용품 목록
+)
+
 class InventoryManager(
     private val products: List<Product>,
     private val thresholds: Thresholds = Thresholds(),
@@ -49,10 +55,9 @@ class InventoryManager(
         }
 
         val sorted = products
-            .map { p -> p to (soldQty[p.name] ?: 0) }
-            .sortedByDescending { (p, qty) -> p.price * qty }
+            .map { p -> p to (soldQty[p.name] ?: 0) }                 // (상품, 판매수량)
+            .sortedByDescending { (p, qty) -> p.price * qty }         // 매출액 기준
 
-        // 항상 5개 보장 (상품이 5개 미만이면 0매출 filler를 붙임)
         val top = if (sorted.size >= 5) {
             sorted.take(5)
         } else {
@@ -111,7 +116,28 @@ class InventoryManager(
         )
     }
 
-    /** 외부 노출: 리포트 생성 (주관 레이어 포함) */
+    /** 카테고리 세부 분류(음료=용량, 식품=유통기한D, 생활=브랜드) */
+    private fun buildDrilldown(today: LocalDate): Drilldown {
+        val beverage = products
+            .filter { it.category == ProductCategory.BEVERAGE }
+            .groupBy { it.volumeMl ?: 0 }                     // 미지정은 0으로 묶음
+            .toSortedMap()
+
+        val farFuture = today.plusYears(50)
+        val food = products
+            .filter { it.category == ProductCategory.FOOD }
+            .groupBy { ChronoUnit.DAYS.between(today, it.expiryDate ?: farFuture).toInt() }
+            .toSortedMap()                                     // D-? 오름차순
+
+        val living = products
+            .filter { it.category == ProductCategory.LIVING }
+            .groupBy { (it.brand ?: "기타").trim() }
+            .toSortedMap(String.CASE_INSENSITIVE_ORDER)
+
+        return Drilldown(beverageByVolume = beverage, foodByDaysToExpire = food, livingByBrand = living)
+    }
+
+    /** 외부 노출: 리포트 생성 (주관 레이어 + 드릴다운 추가) */
     fun report(sales: List<Sale>, today: LocalDate = LocalDate.now()): Report {
         val qtyByName = sales.groupBy { it.productName }.mapValues { it.value.sumOf { s -> s.qty } }
 
@@ -133,6 +159,7 @@ class InventoryManager(
         }
 
         val operations = buildOperationsOverview(sales, today)
+        val drilldown = buildDrilldown(today)
 
         return Report.build(
             today = today,
@@ -143,7 +170,8 @@ class InventoryManager(
             lowestTurnover = lowestTurnover,
             reorderSubjective = reorderSubjective,
             pricingSubjective = pricingSubjective,
-            operations = operations
+            operations = operations,
+            drilldown = drilldown
         )
     }
 }
