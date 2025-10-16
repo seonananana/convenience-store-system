@@ -1,4 +1,4 @@
-name,category,price,targetStock,stock,expiresAt
+name,category,price,ideal,current,expiry
 콜라 500ml,BEVERAGE,1800,50,10,
 감자칩 오리지널,SNACK,2200,40,18,
 도시락 불고기,FOOD,4500,20,0,2025-10-18

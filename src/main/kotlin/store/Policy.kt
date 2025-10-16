@@ -1,8 +1,6 @@
 package store
 
-/**
- * 정책: 재고 부족/유통기한 임박 기준, 할인 정책
- */
+/** 재고 부족/유통기한 임박 기준 */
 data class Thresholds(
     val lowStockRatio: Double = 0.30,   // 재고율 30% 미만이면 부족
     val expireSoonDays: Int = 3         // D-3 이내면 유통기한 임박
